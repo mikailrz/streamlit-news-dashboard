@@ -9,57 +9,65 @@ from sklearn.decomposition import LatentDirichletAllocation
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 from transformers import pipeline
-import requests
+import asyncio
+import aiohttp
 from bs4 import BeautifulSoup
-import time
-import random
 import re
-from sklearn.metrics import silhouette_score
+import torch
 
 # Configure Streamlit Page
 st.set_page_config(page_title="News Sentiment & Clustering", layout="wide")
 
 # ---- News Sources ----
 NEWS_SOURCES = [
-    {"url": "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml", "parser": "xml"},
-    {"url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", "parser": "xml"},
-    {"url": "https://www.scmp.com/rss/91/feed", "parser": "xml"},
-    {"url": "https://www.theguardian.com/uk/business/rss", "parser": "xml"},
-    {"url": "https://www.nasdaq.com/feed/rssoutbound?category=Markets", "parser": "xml"},
-    {"url": "https://www.ft.com/?format=rss", "parser": "xml"},
-    {"url": "https://abcnews.go.com/abcnews/topstories", "parser": "xml"},
-    {"url": "https://moxie.foxnews.com/google-publisher/latest.xml", "parser": "xml"},
-    {"url": "http://rss.cnn.com/rss/cnn_topstories.rss", "parser": "xml"},
-    {"url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", "parser": "xml"},
-    {"url": "https://www.yahoo.com/news/rss", "parser": "xml"},
+    {"url": "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"},
+    {"url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"},
+    {"url": "https://www.scmp.com/rss/91/feed"},
+    {"url": "https://www.theguardian.com/uk/business/rss"},
+    {"url": "https://www.nasdaq.com/feed/rssoutbound?category=Markets"},
+    {"url": "https://www.ft.com/?format=rss"},
+    {"url": "https://abcnews.go.com/abcnews/topstories"},
+    {"url": "https://moxie.foxnews.com/google-publisher/latest.xml"},
+    {"url": "http://rss.cnn.com/rss/cnn_topstories.rss"},
+    {"url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"},
+    {"url": "https://www.yahoo.com/news/rss"},
 ]
 
-# ---- Fetch News ----
+# ---- Asynchronous Fetch News ----
+async def fetch_url(session, url):
+    try:
+        async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as response:
+            if response.status == 200:
+                content = await response.text()
+                soup = BeautifulSoup(content, "lxml-xml")
+                articles = []
+                for item in soup.find_all("item"):
+                    title = item.title.text if item.title else "No Title"
+                    description = item.description.text if item.description else "No Description"
+                    link = item.link.text if item.link else None
+                    articles.append({"title": title, "description": description, "link": link})
+                return articles
+    except Exception as e:
+        return []
+
+async def fetch_news():
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch_url(session, source["url"]) for source in NEWS_SOURCES]
+        results = await asyncio.gather(*tasks)
+        all_articles = [article for sublist in results for article in sublist]
+    return pd.DataFrame(all_articles)
+
 @st.cache_data
-def fetch_news():
-    articles = []
-    for source in NEWS_SOURCES:
-        try:
-            time.sleep(random.uniform(1, 3))
-            response = requests.get(source["url"], headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, "lxml-xml")
-            for item in soup.find_all("item"):
-                title = item.title.text if item.title else "No Title"
-                description = item.description.text if item.description else "No Description"
-                link = item.link.text if item.link else None
-                articles.append({"title": title, "description": description, "link": link})
-        except Exception as e:
-            st.warning(f"⚠️ Failed to fetch from {source['url']}: {e}")
-    return pd.DataFrame(articles)
+def get_news():
+    return asyncio.run(fetch_news())
 
 # Load News Data
 st.sidebar.subheader("📡 Fetch Latest News")
 if st.sidebar.button("🔄 Fetch News"):
-    news_df = fetch_news()
+    news_df = get_news()
     st.sidebar.success("✅ News data updated!")
 else:
-    news_df = fetch_news()
+    news_df = get_news()
 
 if news_df.empty:
     st.warning("No news articles fetched. Try clicking 'Fetch News'.")
@@ -69,7 +77,8 @@ else:
 # ---- Sentiment Analysis ----
 @st.cache_resource
 def analyze_sentiment(news_df):
-    sentiment_model = pipeline("text-classification", model="nlptown/bert-base-multilingual-uncased-sentiment")
+    device = 0 if torch.cuda.is_available() else -1  # Use GPU if available
+    sentiment_model = pipeline("text-classification", model="nlptown/bert-base-multilingual-uncased-sentiment", device=device)
     news_df[['sentiment', 'sentiment_score']] = news_df['description'].apply(
         lambda x: pd.Series((sentiment_model(x[:512])[0]['label'], sentiment_model(x[:512])[0]['score']))
     )
@@ -105,9 +114,7 @@ CUSTOM_STOPWORDS = set([
     "New York Times", "Reuters", "BBC", "CNBC", "MarketWatch", "Nasdaq",
     "SCMP", "Investopedia", "Bloomberg", "Forbes", "The Guardian", "FT",
     "WSJ", "Economist", "Business", "Markets", "Finance", "news", "article",
-    "href", "https", "http", "www", "com", "html", "utm", "rss", "feed",
-    "p", "s", "u", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
-    "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+    "href", "https", "http", "www", "com", "html", "utm", "rss", "feed"
 ])
 
 # Combine all descriptions
