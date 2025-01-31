@@ -1,13 +1,13 @@
 streamlit
 pandas
 numpy
-plotly
 matplotlib
+plotly
 wordcloud
-sentence-transformers
 scikit-learn
-requests
-beautifulsoup4
+sentence-transformers
 transformers
 torch
+aiohttp
+beautifulsoup4
 lxml
