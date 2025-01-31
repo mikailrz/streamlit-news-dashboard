@@ -125,7 +125,7 @@ def cluster_news(news_df, num_clusters=None):
     bert_model = SentenceTransformer("all-MiniLM-L6-v2")
     embeddings = bert_model.encode(news_df["description"].tolist(), show_progress_bar=False)
 
-    # Automatically determine optimal number of clusters
+    # Determine optimal number of clusters (Auto mode)
     if num_clusters is None:
         max_clusters = min(10, len(news_df) // 2)
         silhouette_scores = []
@@ -140,16 +140,28 @@ def cluster_news(news_df, num_clusters=None):
     else:
         best_k = num_clusters
 
-    # Apply KMeans clustering with dynamic k
+    # Apply KMeans clustering
     kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
     news_df["bert_topic"] = kmeans.fit_predict(embeddings)
 
-    # Assign topic labels dynamically & ensure sorted order
-    unique_topics = sorted(news_df["bert_topic"].unique())
-    topic_mapping = {old_label: f"Topic {i+1}" for i, old_label in enumerate(unique_topics)}
-    news_df["topic_label"] = news_df["bert_topic"].map(topic_mapping)
+    # Extract top words for each cluster
+    vectorizer = TfidfVectorizer(stop_words="english", max_features=1000)
+    X = vectorizer.fit_transform(news_df["description"])
+    feature_names = np.array(vectorizer.get_feature_names_out())
+
+    topic_keywords = {}
+    for i in range(best_k):
+        topic_indices = np.where(news_df["bert_topic"] == i)[0]
+        if len(topic_indices) > 0:
+            topic_tfidf = X[topic_indices].mean(axis=0)
+            top_words = feature_names[np.argsort(-topic_tfidf.A1)[:3]]  # Get top 3 words
+            topic_keywords[i] = " / ".join(top_words)
+
+    # Rename topics with extracted keywords
+    news_df["topic_label"] = news_df["bert_topic"].map(topic_keywords)
 
     return news_df
+
 
 # Sidebar control for clustering
 st.sidebar.subheader("🔍 Clustering Settings")
@@ -161,21 +173,20 @@ if cluster_mode == "Manual":
 
 news_df = cluster_news(news_df, num_clusters)
 
-# ---- Topic Visualization ----
-st.subheader("📰 News Clustering using Dynamic BERT + KMeans")
-# Ensure correct sorting of topics
+# Sort topics for better readability
 topic_counts = news_df['topic_label'].value_counts().reset_index()
 topic_counts.columns = ['Topic', 'Article Count']
-topic_counts = topic_counts.sort_values(by='Topic')  # Ensure topics are sorted properly
+topic_counts = topic_counts.sort_values(by='Article Count', ascending=False)  # Sort by size
 
 fig_topic = px.bar(
     topic_counts,
     x='Topic',
     y='Article Count',
-    labels={'x': 'Topic', 'y': 'Article Count'},
+    labels={'x': 'Topic Keywords', 'y': 'Article Count'},
     title=f"News Clustering with {news_df['topic_label'].nunique()} Topics"
 )
 st.plotly_chart(fig_topic)
+
 
 # ---- Display News Articles ----
 st.subheader("🗞️ Latest News Articles")
