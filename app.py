@@ -97,8 +97,8 @@ st.subheader("☁️ Word Cloud of News Descriptions")
 
 CUSTOM_STOPWORDS = [
     "New York Times", "Reuters", "BBC", "CNBC", "MarketWatch", "Nasdaq",
-    "SCMP", "Investopedia", "Bloomberg", "Forbes", "The Guardian", "FT",
-    "WSJ", "Economist", "Business", "Markets", "Finance", "news", "article"
+    "SCMP", "Investopedia", "Bloomberg", "Forbes", "TheGuardian", "FT",
+    "WSJ", "Economist", "Business", "Markets", "Finance", "news", "article", "href", "https", 
 ]
 
 text = " ".join(news_df['description'].dropna().astype(str))
