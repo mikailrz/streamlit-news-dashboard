@@ -19,20 +19,12 @@ st.set_page_config(page_title="News Sentiment & Clustering", layout="wide")
 
 # ---- News Sources ----
 NEWS_SOURCES = [
-    {"url": "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml", "parser": "xml", "tags": ["item"]},
-    {"url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", "parser": "xml", "tags": ["item"]},
-    {"url": "http://feeds.marketwatch.com/marketwatch/topstories", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.investing.com/rss/news.rss", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.scmp.com/rss/91/feed", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.theguardian.com/uk/business/rss", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.nasdaq.com/feed/rssoutbound?category=Markets", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.investopedia.com/feed/updates", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.cnbc.com/id/100003114/device/rss/rss.html", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.reuters.com/finance/rss", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.ft.com/?format=rss", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.forbes.com/finance/feed2/", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.economist.com/finance-and-economics/rss.xml", "parser": "xml", "tags": ["item"]},
-    {"url": "https://www.wsj.com/xml/rss/3_7031.xml", "parser": "xml", "tags": ["item"]}
+    {"url": "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml", "parser": "xml"},
+    {"url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", "parser": "xml"},
+    {"url": "https://www.scmp.com/rss/91/feed", "parser": "xml"},
+    {"url": "https://www.theguardian.com/uk/business/rss", "parser": "xml"},
+    {"url": "https://www.nasdaq.com/feed/rssoutbound?category=Markets", "parser": "xml"},
+    {"url": "https://www.ft.com/?format=rss", "parser": "xml"},
 ]
 
 # ---- Fetch News ----
@@ -44,7 +36,7 @@ def fetch_news():
             time.sleep(random.uniform(1, 3))
             response = requests.get(source["url"], headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
             response.raise_for_status()
-            soup = BeautifulSoup(response.content, "xml")
+            soup = BeautifulSoup(response.content, "lxml-xml")  # Explicitly use lxml-xml parser
             for item in soup.find_all("item"):
                 title = item.title.text if item.title else "No Title"
                 description = item.description.text if item.description else "No Description"
