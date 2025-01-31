@@ -13,6 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import random
+from sklearn.metrics import silhouette_score
 
 # Configure Streamlit Page
 st.set_page_config(page_title="News Sentiment & Clustering", layout="wide")
@@ -36,7 +37,7 @@ def fetch_news():
             time.sleep(random.uniform(1, 3))
             response = requests.get(source["url"], headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
             response.raise_for_status()
-            soup = BeautifulSoup(response.content, "lxml-xml")  # Explicitly use lxml-xml parser
+            soup = BeautifulSoup(response.content, "lxml-xml")
             for item in soup.find_all("item"):
                 title = item.title.text if item.title else "No Title"
                 description = item.description.text if item.description else "No Description"
@@ -93,51 +94,81 @@ st.plotly_chart(fig_sentiment)
 
 # ---- Word Cloud ----
 st.subheader("☁️ Word Cloud of News Descriptions")
+
+CUSTOM_STOPWORDS = [
+    "New York Times", "Reuters", "BBC", "CNBC", "MarketWatch", "Nasdaq",
+    "SCMP", "Investopedia", "Bloomberg", "Forbes", "The Guardian", "FT",
+    "WSJ", "Economist", "Business", "Markets", "Finance", "news", "article"
+]
+
 text = " ".join(news_df['description'].dropna().astype(str))
+
+# Remove stopwords
+for stopword in CUSTOM_STOPWORDS:
+    text = text.replace(stopword, "")
+
 wordcloud = WordCloud(width=800, height=400, background_color='white', colormap='viridis').generate(text)
+
 fig, ax = plt.subplots(figsize=(10, 5))
 ax.imshow(wordcloud, interpolation="bilinear")
 ax.axis("off")
 st.pyplot(fig)
 
-# ---- Thematic Clustering (LDA & BERT) ----
+# ---- Thematic Clustering (Dynamic LDA & BERT) ----
 @st.cache_resource
-def cluster_news(news_df):
-    # TF-IDF Vectorization + LDA
-    vectorizer = TfidfVectorizer(stop_words="english", max_features=1000)
-    X = vectorizer.fit_transform(news_df["description"])
-    lda_model = LatentDirichletAllocation(n_components=5, random_state=42)
-    topic_distribution = lda_model.fit_transform(X)
-    news_df["lda_topic"] = np.argmax(topic_distribution, axis=1)
+def cluster_news(news_df, num_clusters=None):
+    if len(news_df) < 5:
+        st.warning("Not enough articles to cluster. Skipping clustering.")
+        return news_df
 
-    # BERT Embeddings + KMeans
+    # Convert text into embeddings using BERT
     bert_model = SentenceTransformer("all-MiniLM-L6-v2")
     embeddings = bert_model.encode(news_df["description"].tolist(), show_progress_bar=False)
-    kmeans = KMeans(n_clusters=5, random_state=42, n_init=10)
+
+    # Automatically determine optimal number of clusters
+    if num_clusters is None:
+        max_clusters = min(10, len(news_df) // 2)
+        silhouette_scores = []
+
+        for k in range(2, max_clusters + 1):
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(embeddings)
+            score = silhouette_score(embeddings, labels)
+            silhouette_scores.append((k, score))
+
+        best_k = max(silhouette_scores, key=lambda x: x[1])[0]
+    else:
+        best_k = num_clusters
+
+    # Apply KMeans clustering with dynamic k
+    kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
     news_df["bert_topic"] = kmeans.fit_predict(embeddings)
 
-    # Topic Labels
-    topic_labels = {
-        0: "Global Economy",
-        1: "Market Trends",
-        2: "Geopolitics & Trade",
-        3: "Technology & Innovation",
-        4: "Energy & Commodities"
-    }
+    # Assign topic labels dynamically
+    unique_topics = sorted(news_df["bert_topic"].unique())
+    topic_labels = {topic: f"Topic {topic+1}" for topic in unique_topics}
     news_df["topic_label"] = news_df["bert_topic"].map(topic_labels)
 
     return news_df
 
-news_df = cluster_news(news_df)
+# Sidebar control for clustering
+st.sidebar.subheader("🔍 Clustering Settings")
+cluster_mode = st.sidebar.radio("Select Clustering Mode", ["Auto", "Manual"])
+num_clusters = None
+
+if cluster_mode == "Manual":
+    num_clusters = st.sidebar.slider("Select Number of Clusters", min_value=2, max_value=min(10, len(news_df) // 2), value=5)
+
+news_df = cluster_news(news_df, num_clusters)
 
 # ---- Topic Visualization ----
-st.subheader("📰 News Clustering using BERT + KMeans")
+st.subheader("📰 News Clustering using Dynamic BERT + KMeans")
 fig_topic = px.bar(
     news_df['topic_label'].value_counts(),
     x=news_df['topic_label'].value_counts().index,
     y=news_df['topic_label'].value_counts().values,
     labels={'x': 'Topic', 'y': 'Article Count'},
-    title="News Clustering Topics"
+    title=f"News Clustering with {news_df['topic_label'].nunique()} Topics"
 )
 st.plotly_chart(fig_topic)
 
@@ -151,4 +182,3 @@ for _, row in news_df.iterrows():
     st.write("---")
 
 st.success("🚀 News Sentiment Analysis & Clustering Completed!")
-
