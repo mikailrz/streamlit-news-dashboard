@@ -144,10 +144,10 @@ def cluster_news(news_df, num_clusters=None):
     kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
     news_df["bert_topic"] = kmeans.fit_predict(embeddings)
 
-    # Assign topic labels dynamically
+    # Assign topic labels dynamically & ensure sorted order
     unique_topics = sorted(news_df["bert_topic"].unique())
-    topic_labels = {topic: f"Topic {topic+1}" for topic in unique_topics}
-    news_df["topic_label"] = news_df["bert_topic"].map(topic_labels)
+    topic_mapping = {old_label: f"Topic {i+1}" for i, old_label in enumerate(unique_topics)}
+    news_df["topic_label"] = news_df["bert_topic"].map(topic_mapping)
 
     return news_df
 
@@ -163,10 +163,15 @@ news_df = cluster_news(news_df, num_clusters)
 
 # ---- Topic Visualization ----
 st.subheader("📰 News Clustering using Dynamic BERT + KMeans")
+# Ensure correct sorting of topics
+topic_counts = news_df['topic_label'].value_counts().reset_index()
+topic_counts.columns = ['Topic', 'Article Count']
+topic_counts = topic_counts.sort_values(by='Topic')  # Ensure topics are sorted properly
+
 fig_topic = px.bar(
-    news_df['topic_label'].value_counts(),
-    x=news_df['topic_label'].value_counts().index,
-    y=news_df['topic_label'].value_counts().values,
+    topic_counts,
+    x='Topic',
+    y='Article Count',
     labels={'x': 'Topic', 'y': 'Article Count'},
     title=f"News Clustering with {news_df['topic_label'].nunique()} Topics"
 )
