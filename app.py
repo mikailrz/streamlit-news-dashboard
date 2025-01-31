@@ -26,6 +26,12 @@ NEWS_SOURCES = [
     {"url": "https://www.theguardian.com/uk/business/rss", "parser": "xml"},
     {"url": "https://www.nasdaq.com/feed/rssoutbound?category=Markets", "parser": "xml"},
     {"url": "https://www.ft.com/?format=rss", "parser": "xml"},
+    {"url": "https://abcnews.go.com/abcnews/topstories", "parser": "xml"},
+    {"url": "https://moxie.foxnews.com/google-publisher/latest.xml", "parser": "xml"},
+    {"url": "http://rss.cnn.com/rss/cnn_topstories.rss", "parser": "xml"},
+    {"url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", "parser": "xml"},
+    {"url": "https://www.yahoo.com/news/rss", "parser": "xml"},
+    
 ]
 
 # ---- Fetch News ----
@@ -98,7 +104,7 @@ st.subheader("☁️ Word Cloud of News Descriptions")
 CUSTOM_STOPWORDS = [
     "New York Times", "Reuters", "BBC", "CNBC", "MarketWatch", "Nasdaq",
     "SCMP", "Investopedia", "Bloomberg", "Forbes", "TheGuardian", "FT",
-    "WSJ", "Economist", "Business", "Markets", "Finance", "news", "article", "href", "https", 
+    "WSJ", "Economist", "Business", "Markets", "Finance", "news", "article", "href", "https", "p", "s", "rttnews", "u", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", 
 ]
 
 text = " ".join(news_df['description'].dropna().astype(str))
